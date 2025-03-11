@@ -159,11 +159,13 @@ git checkout remotes/origin/main -- build.sh
 ```
 
 ### Usage
-> *note*: distro: `fedora32`, `rhel7`, `rhel8`
+> *note*: 
+distro: `fedora32`, `rhel7`, `rhel8`
+module: `570`, `565`, `550`, `535`
 
 ```shell
-./build.sh path/to/*.run ${distro}
-> ex: time ./build.sh ~/Downloads/NVIDIA-Linux-x86_64-440.33.01.run rhel8
+./precompile-nvidia-build.sh path/to/*.run ${distro} ${module}
+> ex: time ./precompile-nvidia-build.sh ~/Downloads/NVIDIA-Linux-x86_64-440.33.01.run rhel8 565
 ```
 
 
@@ -349,7 +351,7 @@ yum clean all
 ```
 
 
-## Installing packages
+## Installing packages (online)
 
 > *note:* `XXX` is the first `.` delimited field in the driver version, ex: `440` in `440.33.01`
 
@@ -374,7 +376,7 @@ yum clean all
   ```
 
 
-## Modularity Profiles
+### Modularity Profiles
 
 
 * **RHEL8** or **Fedora** profiles: `default`, `ks`, `fm`, `src`
@@ -416,6 +418,25 @@ yum clean all
   dnf module install nvidia-driver:${stream}/{default,src}
   ```
 
+## Installing packages (offline)
+
+In situations where the NVIDIA driver must be installed on a machine without internet access, the steps below download relevant packages for the specified precompiled stream (e.g., `latest`, `XXX`)
+
+> *note*: The steps below require a machine with internet access. This is intended to be used for precompiled streams; though may likely work for other streams (e.g., `latest-dkms`, `XXX-dkms`)
+
+```shell
+./build_driver_deps.sh
+```
+
+The result is a compressed directory (`nvidia-driver-${module}.tar.gz`) with 1.) precompiled NVIDIA binaries and 2.) dependencies. The compressed directory can be uploaded to the machine without internet access.
+
+### Local installation (RPM)
+
+Assuming no internet access, the NVIDIA driver can be installed by simply unzipping the compressed directory (`nvidia-driver-${module}.tar.gz`) and installing RPM packages locally.
+
+```shell
+sudo dnf --disablerepo=* install "/path/to/nvidia-driver-${module}/"*.rpm
+```
 
 ## Presentations
 
