@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 
-# Inputs
+## Revised NVIDIA pre-compiled driver script; source: https://github.com/NVIDIA/yum-packaging-precompiled-kmod/blob/main/build.sh
+
+# Argument inputs
 runfile="$1"
 distro="$2"
+module="$3"
 
 # Build defaults
-topdir="$HOME/precompiled-kmod"
+topdir=~
 stream="latest"
 epoch=3
 
@@ -53,7 +56,7 @@ baseURL="http://developer.download.nvidia.com/compute/cuda/repos"
 downloads=$topdir/repo
 
 # Repo defaults
-myRepo="my-precompiled"
+myRepo="nvidia-precompiled-${distro}-${version}"
 repoFile="${myRepo}.repo"
 
 
@@ -154,7 +157,6 @@ EOF
 
 kmod_rpm()
 {
-    mkdir -p "$topdir"
     (cd "$topdir" && mkdir BUILD BUILDROOT RPMS SRPMS SOURCES SPECS)
 
     cp -v -- *key* "$topdir/SOURCES/"
@@ -208,6 +210,9 @@ copy_rpms()
 
     plugin=$(grep -E "plugin-nvidia" primary.xml | grep "<location" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
     driverFiles=$(grep -E "${version}-" primary.xml | grep "<location" | awk -F '"' '{print $2}')
+    eglx11=$(grep -E "egl-x11" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
+    eglwayland=$(grep -E "\<egl-wayland-[^a-zA-Z]" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk 'NR==1')
+    eglwaylandDevel=$(grep -E "egl-wayland-devel" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
 
     if [[ -z "$driverFiles" ]]; then
         err "Unable to locate $version driver packages in repository for ${distro}/${arch}"
@@ -226,19 +231,25 @@ copy_rpms()
     mkdir -p "$downloads"
 
     # Rest of driver packages
-    for rpm in $plugin $glvndFiles $driverFiles; do
+    for rpm in $plugin $glvndFiles $driverFiles $eglx11 $eglwayland $eglwaylandDevel; do
         echo "  -> $rpm"
         if [[ ! -f ${downloads}/${rpm} ]]; then
             curl -sL "${baseURL}/${distro}/${arch}/${rpm}" --output "${downloads}/${rpm}"
         fi
     done
+
+    # downloads `binutils` depedency to enable usage of `kmod-nvidia` package
+    sudo dnf download --downloaddir="${downloads}/${rpm}" binutils
 }
 
 make_repo()
 {
+    cd "$topdir"
     # genmodules.py
     if [[ ! -f genmodules.py ]]; then
-        err "Unable to locate genmodules.py"
+        echo "Unable to locate genmodules.py; downloading from GitHub..."
+        curl -O https://raw.githubusercontent.com/NVIDIA/cuda-repo-management/main/genmodules.py
+        chmod +x genmodules.py
     fi
 
     # kmod packages
@@ -266,10 +277,69 @@ repo_file()
 	enabled=1
 	gpgcheck=0
 EOF
-
     echo "  -> $repoFile"
 }
 
+select_module()
+{
+    # installing yq
+    if [[ ! -f yq_linux_amd64 ]]; then
+        echo "Unable to locate yq_linux_amd64; downloading from GitHub and installing to /usr/bin..."
+        curl -OL https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
+        sudo mv yq_linux_amd64 /usr/bin/yq
+        sudo chmod +x /usr/bin/yq
+    fi
+    
+    cd "$topdir"
+    if [[ ! -f modules.yaml ]]; then
+        err "Unable to locate modules.yaml file. Ensure the genmodules.py output is in the /u01/opt/nvidia-driver directory."
+    fi
+
+    # refining packages to selected module; similar behavior if using 'dnf module install nvidia-driver:[stream]'
+    module_array=($(yq "select(.data.stream == \"$module\") | .data.artifacts.rpms" modules.yaml | sed -E 's/^- //;s/.://'))
+
+    # Check if the module array is empty.
+    if [ ${module_array[@]} -eq 0 ]; then
+    echo "No RPM packages found in '$topdir' for module: $module."
+    exit 0
+    fi
+
+    # Loop through each package and create new 'repo' directory with specific RPMs for specified module
+    mkdir "$topdir/repo_$module" -p
+    for pkg in "${module_array[@]}"; do
+        echo "Copying package for module $module: $pkg"
+        cp "$topdir/repo/$pkg.rpm" $topdir/repo_$module || echo "Failed to copy $pkg, skipping..."
+    done
+
+    # Manual copy of the specific `kmod` for our kernel
+    echo "Copying compiled 'kmod-nvidia' into repo_$module..."
+    cp "$topdir/repo/kmod-nvidia-$version-$kernel-$release-$version-3$dist.$arch.rpm" "$topdir/repo_$module"
+    
+    eglx11=$(grep -E "egl-x11" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
+    eglwayland=$(grep -E "\<egl-wayland-[^a-zA-Z]" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk 'NR==1')
+
+    # Install additional packages not included within 'module'
+    for rpm in $eglx11 $eglwayland; do
+        echo "  -> $rpm"
+        if [[ ! -f ${topdir}/repo_${module}/${rpm} ]]; then
+            curl -sL "${baseURL}/${distro}/${arch}/${rpm}" --output "${topdir}/repo_${module}/${rpm}"
+        fi
+    done
+
+    # downloads `binutils` depedency to enable usage of `kmod-nvidia` package
+    sudo dnf download --downloaddir="${topdir}/repo_${module}" binutils
+
+    # BUGFIX: remove any stray '.i686.rpm' files; which cannot install dependencies due to mis-matched architecture (x86_64)
+    echo "removing '.i686' files from repo...${topdir}/repo_${module}"
+    rm -f "${topdir}/repo_${module}/*.i686.rpm"
+
+    # Clean-up old module folder, rename module-specific directory
+    # echo "Cleaning up legacy 'repo' directory; copying in 'repo_$module' directory"
+    # cp -r "${topdir}/repo/repodata" "${topdir}/repo_${module}"
+    # rm -rf repo
+    # cp -r repo_$module repo
+    # rm -rf repo_$module
+}
 
 #
 # Stages
@@ -334,6 +404,7 @@ for pkg in "$topdir/RPMS/${arch}"/*; do
 done
 echo
 
+
 if [[ -d "$OUTPUT" ]]; then
     mkdir -p "$downloads"
     # Copy RPMs built from https://github.com/NVIDIA/yum-packaging-*
@@ -357,6 +428,7 @@ echo "==> repo_file()"
 repo_file
 echo
 
-echo ":: Output repository to $topdir/repo"
-git_ignore
-
+# refines repo for specific driver module
+echo "==> select_module()"
+select_module
+echo
