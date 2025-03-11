@@ -425,7 +425,7 @@ In situations where the NVIDIA driver must be installed on a machine without int
 > *note*: The steps below require a machine with internet access. This is intended to be used for precompiled streams; though may likely work for other streams (e.g., `latest-dkms`, `XXX-dkms`)
 
 ```shell
-./build_driver_deps.sh
+./build-driver-deps.sh
 ```
 
 The result is a compressed directory (`nvidia-driver-${module}.tar.gz`) with 1.) precompiled NVIDIA binaries and 2.) dependencies. The compressed directory can be uploaded to the machine without internet access.
