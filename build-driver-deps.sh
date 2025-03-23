@@ -29,14 +29,16 @@ fi
 echo "Adding dependencies for packages from '"$topdir/repo_${module}"':"
 printf '  %s\n' "${packages[@]}"
 
-mkdir $topdir/repo_${module}/deps -p
-cd $topdir/repo_${module}/deps
-# Loop through each package and download dependencies individually into /deps directory
-for pkg in "${packages[@]}"; do
-    echo "Downloading dependencies for: $pkg in '"$topdir/repo_${module}"'"
-    sudo dnf download --resolve "$topdir/repo_${module}/$pkg.rpm" || echo "Failed to download dependencies for $pkg, skipping..."
-done
+# create folder for full NVIDIA package, including dependencies
+mkdir $topdir/repo_${module}/full_package -p
+cd $topdir/repo_${module}/full_package
+
+# copy `repo_${module}` directory
+cp -f "$topdir/repo_${module}"/*.rpm .
+
+# recursively download all deps
+sudo dnf download --resolve "$topdir/repo_${module}/full_package"/*.rpm 
 
 # Zip up repo for transfer
-echo "Zipping directory '"$topdir/repo_${module}/deps..."'"
-tar -czvf nvidia-driver-${module}.tar.gz -C "$topdir/repo_${module}/deps"
+echo "Zipping directory '"$topdir/repo_${module}/full_package..."'"
+tar -czvf nvidia-driver-${module}.tar.gz -C "$topdir/repo_${module}/full_package/"
