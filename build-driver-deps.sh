@@ -30,15 +30,15 @@ echo "Adding dependencies for packages from '"$topdir/repo_${module}"':"
 printf '  %s\n' "${packages[@]}"
 
 # create folder for full NVIDIA package, including dependencies
-mkdir $topdir/repo_${module}/full_package -p
-cd $topdir/repo_${module}/full_package
+mkdir $topdir/repo_${module}/full_nvidia_${module}_package -p
+cd $topdir/repo_${module}/full_nvidia_${module}_package
 
 # copy `repo_${module}` directory
 cp -f "$topdir/repo_${module}"/*.rpm .
 
 # recursively download all deps
-sudo dnf download --resolve "$topdir/repo_${module}/full_package"/*.rpm 
+sudo dnf download --resolve "$topdir/repo_${module}/full_nvidia_${module}_package"/*.rpm 
 
 # Zip up repo for transfer
-echo "Zipping directory '"$topdir/repo_${module}/full_package..."'"
-tar -czvf nvidia-driver-${module}.tar.gz -C "$topdir/repo_${module}/full_package/"
+echo "Zipping directory '"$topdir/repo_${module}/full_nvidia_${module}_package..."'"
+tar -czvf nvidia-driver-${module}.tar.gz -C "$topdir/repo_${module}" full_nvidia_${module}_package
