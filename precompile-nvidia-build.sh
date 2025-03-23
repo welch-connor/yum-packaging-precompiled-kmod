@@ -209,7 +209,7 @@ copy_rpms()
     gunzip primary.xml.gz
 
     plugin=$(grep -E "plugin-nvidia" primary.xml | grep "<location" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
-    driverFiles=$(grep -E "${version}-" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}')
+    driverFiles=$(grep -E "${version}-" primary.xml | grep "<location" | awk -F '"' '{print $2}')
     eglx11=$(grep -E "egl-x11" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
     eglwayland=$(grep -E "\<egl-wayland-[^a-zA-Z]" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk 'NR==1')
     eglwaylandDevel=$(grep -E "egl-wayland-devel" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
@@ -337,6 +337,10 @@ select_module()
 
     # downloads `binutils` depedency to enable usage of `kmod-nvidia` package
     sudo dnf download --downloaddir="${topdir}/repo_${module}" binutils
+
+    #BUGFIX: Remove .i686 architecture files
+    echo "removing '.i686' files from repo...${topdir}/repo_${module}"
+    rm -f "${topdir}/repo_${module}/"*i686.rpm
 
     #BUGFIX: Remove nvidia-fabric-manager
     echo "removing 'nvidia-fabric-manager' file from repo...${topdir}/repo_${module}"
