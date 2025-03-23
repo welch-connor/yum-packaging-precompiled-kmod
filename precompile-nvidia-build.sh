@@ -209,7 +209,7 @@ copy_rpms()
     gunzip primary.xml.gz
 
     plugin=$(grep -E "plugin-nvidia" primary.xml | grep "<location" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
-    driverFiles=$(grep -E "${version}-" primary.xml | grep "<location" | awk -F '"' '{print $2}')
+    driverFiles=$(grep -E "${version}-" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}')
     eglx11=$(grep -E "egl-x11" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
     eglwayland=$(grep -E "\<egl-wayland-[^a-zA-Z]" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk 'NR==1')
     eglwaylandDevel=$(grep -E "egl-wayland-devel" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
@@ -317,6 +317,7 @@ select_module()
     
     eglx11=$(grep -E "egl-x11" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk NR==1)
     eglwayland=$(grep -E "\<egl-wayland-[^a-zA-Z]" primary.xml | grep "<location" | grep -E "${arch}" | awk -F '"' '{print $2}' | sort -rV | awk 'NR==1')
+    libnvidia=$(grep -E "libnvidia-" primary.xml | grep "<location" | grep -E "${arch}" | grep -E "${version}" | awk -F '"' '{print $2}')
 
     # Install additional packages not included within 'module'
     for rpm in $eglx11 $eglwayland; do
@@ -326,13 +327,22 @@ select_module()
         fi
     done
 
+    # Copy in libnividia files from original 'repo' directory
+    for rpm in $libnvidia; do
+        echo "  -> $rpm"
+        if [[ ! -f ${topdir}/repo_${module}/${rpm} ]]; then
+            cp "${topdir}/repo/${rpm}" "${topdir}/repo_${module}/${rpm}"
+        fi
+    done
+
     # downloads `binutils` depedency to enable usage of `kmod-nvidia` package
     sudo dnf download --downloaddir="${topdir}/repo_${module}" binutils
 
-    # BUGFIX: remove any stray '.i686.rpm' files; which cannot install dependencies due to mis-matched architecture (x86_64)
-    echo "removing '.i686' files from repo...${topdir}/repo_${module}"
-    rm -f "${topdir}/repo_${module}/*.i686.rpm"
+    #BUGFIX: Remove nvidia-fabric-manager
+    echo "removing 'nvidia-fabric-manager' file from repo...${topdir}/repo_${module}"
+    rm -f "${topdir}/repo_${module}/"nvidia-fabric-manager-*.rpm
 
+    #TO-DO: Add in clean-up for existing repo folder after build
     # Clean-up old module folder, rename module-specific directory
     # echo "Cleaning up legacy 'repo' directory; copying in 'repo_$module' directory"
     # cp -r "${topdir}/repo/repodata" "${topdir}/repo_${module}"
