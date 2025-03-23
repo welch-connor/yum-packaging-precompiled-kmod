@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # Set environment variables
+# `topdir` is directory above `repo_${module}`
 topdir="${1:-~}"
 module="${2:-565}"
 
@@ -42,3 +43,9 @@ sudo dnf download --resolve "$topdir/repo_${module}/full_nvidia_${module}_packag
 # Zip up repo for transfer
 echo "Zipping directory '"$topdir/repo_${module}/full_nvidia_${module}_package..."'"
 tar -czvf nvidia-driver-${module}.tar.gz -C "$topdir/repo_${module}" full_nvidia_${module}_package
+
+# move driver gzip to $topdir
+echo "Moving nvidia-driver-${module}.tar.gz from: $topdir/repo_${module}/full_nvidia_${module}_package/ -> $topdir"
+cp "$topdir/repo_${module}/full_nvidia_${module}_package/nvidia-driver-${module}.tar.gz" $topdir
+rm -f "$topdir/repo_${module}/full_nvidia_${module}_package/nvidia-driver-${module}.tar.gz"
+echo "Driver package complete; saved at: $topdir/nvidia-driver-${module}.tar.gz"
